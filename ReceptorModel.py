@@ -13,12 +13,7 @@ class Receptor:
         self.temp_tip = None
         self.bound = None
         self.receptor_length = receptor_length
-        # """Converting from spherical coordinates to rectangular coordinates for tip_position"""
-        # x = self.tip_position[0] * sin(self.tip_position[2]) * cos(self.tip_position[1])
-        # y = self.tip_position[0] * sin(self.tip_position[2]) * sin(self.tip_position[1])
-        # z = self.tip_position[0] * cos(self.tip_position[2])
         # '''Equations from: https://math.libretexts.org/Bookshelves/Calculus/Book%3A_Calculus_(OpenStax)/12%3A_Vectors_in_Space/12.7%3A_Cylindrical_and_Spherical_Coordinates'''
-        # tip_position_rectangular = np.array([x, y, z])
         tip_position_rectangular = self.convert_spherical_to_rectangular(self.tip_position)
         self.binding_energy = binding_energy
         '''Keeping receptor in the hemisphere'''
@@ -31,7 +26,7 @@ class Receptor:
                     if tip_position_rectangular[i] > self.receptor_length:
                         recoil = tip_position_rectangular[i] - self.receptor_length
                         tip_position_rectangular[i] = self.receptor_length - recoil
-        absolute_position = tip_position_rectangular + self.base_position  # Adding base and tip position
+        absolute_position = tip_position_rectangular + self.base_position
         self.position = absolute_position
         self.dimension = dimension
 
@@ -49,36 +44,29 @@ class Receptor:
         attempt = self.move(value)
         freedom = self.is_space_available(coordinates_list)
         if freedom:
-            if isinstance(self.bound, Ligand):  # If it is bound to a ligand
-                # distance = linalg.norm(self.bound.nanoparticle_position - attempt)
+            if isinstance(self.bound, Ligand):
                 distance = self.distance(self.bound.nanoparticle_position, attempt)
-                inside_radius = (distance <= self.bound.total_radius)  # nanoparticle radius + ligand length
+                inside_radius = (distance <= self.bound.total_radius)
                 '''Returns True if inside and False if outside'''
                 if inside_radius:
                     self.position = attempt
                     self.tip_position = self.temp_tip
                     self.base_position = self.temp_base
-                    # print(f"{self.agent_id} moved to position {self.position} and remained bound to {self.bound.agent_id}")
                     return self.position
                 else:  # If movement outside radius
-                    # if np.random.normal() < exp(-1):  # Bond gets broken
                     if np.random.uniform(low=0, high=1) < exp(-self.binding_energy):  # Bond gets broken
                         self.position = attempt
                         self.tip_position = self.temp_tip
                         self.base_position = self.temp_base
-                        # print(f'Bond broken between {self.bound.agent_id} of {self.bound.nanoparticle_id} and {self.agent_id}')
-                        # print(f"{self.agent_id} moved to position {self.position}")
                         self.bound.bound = None
                         self.bound = None
                         return self.position
                     else:
-                        # print(f'{self.agent_id} stayed at {self.position} and {self.bound.agent_id} of {self.bound.nanoparticle_id} stayed at {self.bound.position}')
                         return self.position
             else:
                 self.position = attempt
                 self.tip_position = self.temp_tip
                 self.base_position = self.temp_base
-                # print(f"{self.agent_id} moved to position {self.position}")
                 return self.position
 
     @staticmethod
@@ -86,15 +74,9 @@ class Receptor:
     def distance(a, b):
         return linalg.norm(a - b)
     '''Without Movement'''
-    # def step(self, value,  coordinates_list):
-    #     """Takes value and coordinates list as parameters, allowing previous functions to work,
-    #      if need be this can be commented out,
-    #      and the alternate step method above can be used"""
-    #     # print(f"{self.agent_id} moved to position {self.position}")
-    #     return self.position
 
     def move(self, value):
-        attempt_tip = self.tip_position + value  # updates tip_position
+        attempt_tip = self.tip_position + value 
         '''Convert spherical brownian coordinates into rectangular just for x and y, z doesn't
         matter as always 0 as the receptor is not moving vertically, i.e. stuck to a surface'''
         x = value[0] * sin(value[2]) * cos(value[1])
@@ -103,18 +85,9 @@ class Receptor:
         attempt_base = self.base_position + value_rectangular
         attempt_base[2] = 0
         attempt = self.get_absolute_position(attempt_tip, attempt_base)
-        # print(f"{self.agent_id} base moved to position {self.base_position}")  # To see base position
-        # print(f"{self.agent_id} tip moved to position {self.tip_position}")  # To see tip spherical position
-        # print(f"{self.agent_id} moved to position {self.position}")
         return attempt
 
-    def get_absolute_position(self, attempt_tip, attempt_base):  # Returns absolute position and maintains position in hemisphere
-        # """Converting from spherical coordinates to rectangular coordinates for tip_position"""
-        # x = attempt_tip[0] * sin(attempt_tip[2]) * cos(attempt_tip[1])
-        # y = attempt_tip[0] * sin(attempt_tip[2]) * sin(attempt_tip[1])
-        # z = attempt_tip[0] * cos(attempt_tip[2])
-        # '''Equations from: https://math.libretexts.org/Bookshelves/Calculus/Book%3A_Calculus_(OpenStax)/12%3A_Vectors_in_Space/12.7%3A_Cylindrical_and_Spherical_Coordinates'''
-        # tip_position_rectangular = np.array([x, y, z])6
+    def get_absolute_position(self, attempt_tip, attempt_base):  
         """Keeping receptor base in the system"""
         for i in range(2):
             upper_limit = self.dimension
@@ -140,10 +113,10 @@ class Receptor:
             if attempt_tip[2] > (0.5 * pi):
                 attempt_tip[2] -= 0.5 * pi
         '''Keeping the tip in the system'''
-        low_x = attempt_base[0] <= self.receptor_length  # x axis
+        low_x = attempt_base[0] <= self.receptor_length 
         high_x = attempt_base[0] >= self.dimension - self.receptor_length
-        low_y = attempt_base[1] <= self.receptor_length  # y axis
-        high_y = attempt_base[1] >= self.dimension - self.receptor_length  # y axis
+        low_y = attempt_base[1] <= self.receptor_length 
+        high_y = attempt_base[1] >= self.dimension - self.receptor_length 
         if low_x and low_y:
             if 0.5 * pi < attempt_tip[1] <= pi:
                 attempt_tip[1] -= 0.5*pi
@@ -190,7 +163,7 @@ class Receptor:
                 attempt_tip[1] += pi
         self.temp_tip = attempt_tip
         tip_position_rectangular = self.convert_spherical_to_rectangular(attempt_tip)
-        absolute_position = tip_position_rectangular + attempt_base  # Adding base and tip position
+        absolute_position = tip_position_rectangular + attempt_base 
         return absolute_position
 
     def is_space_available(self, coordinates_list):
