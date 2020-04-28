@@ -36,7 +36,7 @@ from numba import njit
 
 
 
-class MyModel:
+class Master:
     def __init__(self, dimension, binding_energy):
         self.agents = []  # create an empty list of agents
         self.collision = False
@@ -53,16 +53,16 @@ class MyModel:
         self.ligand_length = ligand_length
         self.number_of_ligands = number_of_ligands
         true_radius = self.nanoparticle_radius + self.ligand_length  # The maximum radius of the nanoparticle including the ligands
-        for i in range(number_of_nanoparticles):  to number of agents
+        for i in range(number_of_nanoparticles):
             agent_id = f'Nanoparticle {i}' # loop from 0
             upper_limit = self.dimension - true_radius
             count = 0
-            while True:
+            while count < 10:
                 nanoparticle_position_xyz = np.array([np.random.uniform(true_radius, upper_limit), np.random.uniform(true_radius, upper_limit), np.random.uniform(true_radius, upper_limit)])  # 3D cube cartesian system - rectangular coordinates
                 if self.is_space_available_nanoparticle(nanoparticle_position_xyz):
                     break
-                else:
-                    continue
+                count = count + 1
+            if (count == 10): raise RuntimeError("Particles could not be created, dimensions may be too low")
             nanoparticle = Nanoparticle(agent_id, nanoparticle_position_xyz, number_of_ligands, nanoparticle_radius,
                                         ligand_length, self.dimension, binding_energy=self.binding_energy)
             self.agents.append(nanoparticle)  # add agent to list of agents
@@ -86,12 +86,13 @@ class MyModel:
         for i in range(number_of_receptors):  # loop from 0 to number of agents
             receptor_id = f'Receptor {i}'
             '''Random rather than ordered receptors'''
-            while True:
+            count = 0
+            while count < 10:
                 base_position = np.array([np.random.uniform(0, self.dimension), np.random.uniform(0, self.dimension), 0]) # 3D cube cartesian system - rectangular coordinates
                 if self.is_space_available_receptor(base_position):
                     break
-                else:
-                    continue
+                count = count + 1
+            if (count == 10): raise RuntimeError("Receptors could not be created, dimensions may be too low or number of receptors too high") 
             receptor = Receptor(receptor_id, base_position, receptor_length, self.dimension, binding_energy=self.binding_energy)  # create receptor
             self.agents.append(receptor)  # add agent to list of agents
 
@@ -267,9 +268,9 @@ class MyModel:
                         else:
                             continue
 
-    @staticmethod
-    @njit(fastmath=True)
-    def distance(a, b):
+    # @staticmethod
+    # @njit(fastmath=True)
+    def distance(self, a, b):
         return linalg.norm(a - b)
 
     @staticmethod
@@ -286,15 +287,15 @@ class MyModel:
         return steric_potential
 
 
-c = [200]
-b = []
 
 
 
 def experiment():
+    c = [200]
+    b = []
     for i in c:
         number_of_seconds = 3600  # i.e. 1 hour = 3600 seconds
-        my_model = MyModel(dimension=1000, binding_energy=200)
+        my_model = Master(dimension=1000, binding_energy=200)
         my_model.create_nanoparticles_and_ligands(number_of_nanoparticles=190, number_of_ligands=int(round(10 ** 2, 0)), nanoparticle_radius=50, ligand_length=7)  # 1-2 nm for ligand  # 95 particles
         my_model.create_receptors(number_of_receptors=1000, receptor_length=100)  # 100 nm for receptor
         print(f'{my_model.dimension} nm\u00b3 system, {my_model.binding_energy} binding energy\n'
@@ -316,7 +317,6 @@ def experiment():
     plt.show()
 
 
-experiment()
 
 
 def stored_visualiser(dimensions, data):
