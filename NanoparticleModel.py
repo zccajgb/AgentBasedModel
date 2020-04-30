@@ -38,7 +38,12 @@ class Nanoparticle:  # inherits from agent
         self.binding_energy = binding_energy
 
     def step(self, value, agents_list):  # values keeps the everything moving according to brownian motion
-      
+        # """Convert spherical brownian coordinates into rectangular"""
+        # x = value[0] * sin(value[2]) * cos(value[1])
+        # y = value[0] * sin(value[2]) * sin(value[1])
+        # z = value[0] * cos(value[2])
+        # value_rectangular = np.array([x, y, z])
+        # value_rectangular = self.convert_spherical_to_rectangular(value)
         attempt = self.position + value  # value_rectangular
         true_attempt = self.get_absolute_position(attempt)
         freedom = self.is_space_available(agents_list, true_attempt)
@@ -51,27 +56,35 @@ class Nanoparticle:  # inherits from agent
             if np.random.uniform(low=0, high=1) > (1 - exp(-self.binding_energy)) ** n:  # Bonds get broken
                 if freedom:
                     self.bound = False
+                    # print(f'{self.agent_id} broke it bonds')
                     self.position = true_attempt
+                    # print(f"{self.agent_id} moved to position {self.position}")
                     for i in self.ligands:
                         if i.bound is not None:
+                            # print(f'The bond between {i.agent_id} and {i.bound.agent_id} was broken')
                             i.bound.bound = None
                             i.bound = None
                         i.step(list_of_ligand_arrays.pop(), self.position)
                 elif not freedom:
+                    # print(f'{self.agent_id} stayed at {self.position}')
                     for i in self.ligands:
                         i.step(list_of_ligand_arrays.pop(), self.position)
             else:
+                # print(f'{self.agent_id} remained bound to the surface at {self.position}')
                 for i in self.ligands:
                     i.step(list_of_ligand_arrays.pop(), self.position)
-        elif n == 0:
-            self.bound = False  
+        elif n == 0:  # i.e. no ligands bound
+            self.bound = False  # If all the bonds were broken by receptors moving then this updates
             if freedom:
                 self.position = true_attempt
+                # print(f"{self.agent_id} moved to position {self.position}")
                 for i in self.ligands:
                     i.step(list_of_ligand_arrays.pop(), self.position)
             elif not freedom:
                 for i in self.ligands:
                     i.step(list_of_ligand_arrays.pop(), self.position)
+                # print(f'{self.agent_id} stayed at {self.position}')
+        # print(f'{self.agent_id} moved to {self.position}')
         return self.position
 
     def is_space_available(self, coordinates_list, attempt):
@@ -107,11 +120,18 @@ class Nanoparticle:  # inherits from agent
         """Keeping nanoparticle in the system"""
         max_abs_position = self.dimension - (self.nanoparticle_radius + self.ligand_length)
         for i in range(3):
+            # while not (self.nanoparticle_radius + self.ligand_length) <= absolute_position[i] <= max_abs_position:
             while not 0 <= absolute_position[i] <= max_abs_position:
                 if absolute_position[i] < 0:
                     absolute_position[i] = abs(absolute_position[i])
+                # if absolute_position[i] < (self.nanoparticle_radius + self.ligand_length):
+                #     absolute_position[i] = absolute_position[i] + self.nanoparticle_radius + self.ligand_length
                 if absolute_position[i] > max_abs_position:
                     recoil = absolute_position[i] - max_abs_position
                     absolute_position[i] = max_abs_position - recoil
+                    # absolute_position[i] = absolute_position[i] % 2 * max_abs_position
+                    # if absolute_position[i] > max_abs_position:
+                    #     recoil = absolute_position[i] - max_abs_position
+                    #     absolute_position[i] = max_abs_position - recoil
 
         return absolute_position

@@ -1,13 +1,15 @@
 import numpy as np
 from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arccos as acos, exp as exp
 from numba import njit
-from ReceptorModel import Receptor
 
 
 class Ligand:
     def __init__(self, agent_id, nanoparticle_id, nanoparticle_position, nanoparticle_radius, ligand_length, base_array, tip_array, binding_energy):
         self.agent_id = f'Ligand {agent_id}'
         """Nanoparticle ligand base spherical coordinates in the format(r,θ,Φ), distance of nanoparticle of radius 1 from the centre of the nanoparticle, on the surface of the nanoparticle"""
+        # ligand_base_position = np.array([nanoparticle_radius, np.random.uniform(0, (2 * pi)), np.random.uniform(0, pi)])  # nanoparticle radius for r as ligands on the surface, 0 <= θ <= 2π, 0 <= φ <= π; θ and φ vary around the nanoparticle surface
+        # self.ligand_tip_position = np.array([np.random.uniform(0, ligand_length), np.random.uniform(0, (2 * pi)),
+        #                                      np.random.uniform(0, (0.5 * pi))])  # Ligand tip varies the length of the ligand (=0.25) from the base position
         ligand_base_position = base_array
         self.ligand_tip_position = tip_array
         self.temp_tip = None
@@ -20,11 +22,20 @@ class Ligand:
         self.binding_energy = binding_energy
 
         '''For ligand base'''
+        # x1 = ligand_base_position[0] * sin(ligand_base_position[2]) * cos(ligand_base_position[1])
+        # y1 = ligand_base_position[0] * sin(ligand_base_position[2]) * sin(ligand_base_position[1])
+        # z1 = ligand_base_position[0] * cos(ligand_base_position[2])  # z value of base
+        # self.ligand_base_position = np.array([x1, y1, z1])
         self.ligand_base_position = self.convert_spherical_to_rectangular(ligand_base_position)
 
         '''For ligand tip'''
+        # x2 = self.ligand_tip_position[0] * sin(self.ligand_tip_position[2]) * cos(self.ligand_tip_position[1])
+        # y2 = self.ligand_tip_position[0] * sin(self.ligand_tip_position[2]) * sin(self.ligand_tip_position[1])
+        # z2 = self.ligand_tip_position[0] * cos(self.ligand_tip_position[2])  # z value of tip
+        # ligand_tip_xyz = np.array([x2, y2, z2])
         ligand_tip_xyz = self.convert_spherical_to_rectangular(self.ligand_tip_position)
 
+        # self.position = np.around(self.ligand_base_position + ligand_tip_xyz + nanoparticle_position, decimals=5)
         self.position = self.ligand_base_position + ligand_tip_xyz + nanoparticle_position
 
     @staticmethod
@@ -44,6 +55,7 @@ class Ligand:
         self.update_nanoparticle_position(nanoparticle_position)
         attempt = self.move(value, nanoparticle_position)
         if isinstance(self.bound, Receptor):
+            # distance = linalg.norm(self.bound.base_position - attempt)
             distance = self.distance(self.bound.base_position, attempt)
             inside_radius = (distance <= self.bound.receptor_length)  # receptor length
             '''Returns True if inside and False if outside'''
@@ -51,14 +63,17 @@ class Ligand:
                 self.position = attempt
                 self.ligand_tip_position = self.temp_tip
                 return self.position
-            else:  
+            else:  # If movement outside radius
+                # if np.random.normal() < exp(-1):  # Bond gets broken
                 if np.random.uniform(low=0, high=1) < exp(-self.binding_energy):  # Bond gets broken
                     self.position = attempt
                     self.ligand_tip_position = self.temp_tip
+                    # print(f'Bond broken between {self.agent_id} of {self.nanoparticle_id} and {self.bound.agent_id}')
                     self.bound.bound = None
                     self.bound = None
                     return self.position
                 else:
+                    # print(f'{self.agent_id} and {self.bound.agent_id} stayed at {self.position} and {self.bound.position}')
                     return self.position
         else:
             self.position = attempt
@@ -94,6 +109,11 @@ class Ligand:
                 attempt_tip[2] -= (0.5 * pi)
         self.temp_tip = attempt_tip
 
+        # For ligand tip
+        # x2 = attempt_tip[0] * sin(attempt_tip[2]) * cos(attempt_tip[1])
+        # y2 = attempt_tip[0] * sin(attempt_tip[2]) * sin(attempt_tip[1])
+        # z2 = attempt_tip[0] * cos(attempt_tip[2])  # z value of tip
+        # ligand_tip_xyz = np.array([x2, y2, z2])
         ligand_tip_xyz = self.convert_spherical_to_rectangular(attempt_tip)
         attempt = self.ligand_base_position + ligand_tip_xyz + nanoparticle_position
         return attempt
@@ -108,3 +128,4 @@ class Ligand:
         '''Equations from: https://math.libretexts.org/Bookshelves/Calculus/Book%3A_Calculus_(OpenStax)/12%3A_Vectors_in_Space/12.7%3A_Cylindrical_and_Spherical_Coordinates'''
         return np.array([r, θ, Φ])
 
+from ReceptorModel import Receptor

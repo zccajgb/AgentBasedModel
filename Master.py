@@ -34,9 +34,14 @@ from LigandModel import Ligand
 import pandas as pd
 from numba import njit
 
+# 20 micro meter for endothelium, width of a endthlial cell
+# start with 1000 nano metres
+
+# check if nanoparticles are too close
+# if binding when they shouldn't be, i.e. are bound particles still bound when not near the surface
 
 
-class Master:
+class MyModel:
     def __init__(self, dimension, binding_energy):
         self.agents = []  # create an empty list of agents
         self.collision = False
@@ -53,18 +58,19 @@ class Master:
         self.ligand_length = ligand_length
         self.number_of_ligands = number_of_ligands
         true_radius = self.nanoparticle_radius + self.ligand_length  # The maximum radius of the nanoparticle including the ligands
-        for i in range(number_of_nanoparticles):
-            agent_id = f'Nanoparticle {i}' # loop from 0
+        for i in range(number_of_nanoparticles):  # loop from 0 to number of agents
+            agent_id = f'Nanoparticle {i}'
             upper_limit = self.dimension - true_radius
             count = 0
-            while count < 10:
+            while True:
                 nanoparticle_position_xyz = np.array([np.random.uniform(true_radius, upper_limit), np.random.uniform(true_radius, upper_limit), np.random.uniform(true_radius, upper_limit)])  # 3D cube cartesian system - rectangular coordinates
                 if self.is_space_available_nanoparticle(nanoparticle_position_xyz):
                     break
-                count = count + 1
-            if (count == 10): raise RuntimeError("Particles could not be created, dimensions may be too low")
+                else:
+                    continue
             nanoparticle = Nanoparticle(agent_id, nanoparticle_position_xyz, number_of_ligands, nanoparticle_radius,
                                         ligand_length, self.dimension, binding_energy=self.binding_energy)
+            # print(f'Created {agent_id}')
             self.agents.append(nanoparticle)  # add agent to list of agents
 
     def is_space_available_nanoparticle(self, attempt):  # makes sure new nanoparticles don't overlap existing ones
@@ -80,20 +86,43 @@ class Master:
         if count == len(positions):
             return True  # Returns True when there is space available
 
+    '''Repulsion when setting up system????'''  # ######################################################################
+    # def is_space_available2(self, coordinates_list, attempt):
+    #     separation = 2 * (self.nanoparticle_radius + self.ligand_length)  # nanoparticles can be touching
+    #     max_closeness = separation + 0.5 * self.nanoparticle_radius  # van der Waals' radius = 0.5 x separation
+    #     count = 0
+    #     for i in coordinates_list:
+    #         distance = self.distance(attempt, i)
+    #         if distance >= separation:  # Checks that if the nanoparticle is a certain distance from the other nanoparticles
+    #             if distance <= max_closeness:  # Checks if close enough for repulsive potential
+    #                 if np.random.uniform(low=0, high=1) < exp(-self.repulsive_potential(distance, max_closeness)):  # If there is repulsion then check  # tolerable_potential:
+    #                     count += 1
+    #             else:
+    #                 count += 1
+    #         elif distance < separation:
+    #             print('Error', distance)
+    #             break
+    #     if count == len(coordinates_list):
+    #         return True  # Returns True when there is space available
+
     def create_receptors(self, number_of_receptors, receptor_length):  # Adds receptors into the system
         self.receptor_length = receptor_length
         self.number_of_receptors = number_of_receptors
+        # for i in range(number_of_receptors):  # loop from 0 to number of agents
+        #     receptor_id = f'Receptor {i}'
+        #     base_position = np.array([np.random.uniform(0, self.dimension), np.random.uniform(0, self.dimension), 0])  # 3D cube cartesian system - rectangular coordinates
+        #     receptor = Receptor(receptor_id, base_position, receptor_length, self.dimension, binding_energy=self.binding_energy)  # create receptor
         for i in range(number_of_receptors):  # loop from 0 to number of agents
             receptor_id = f'Receptor {i}'
             '''Random rather than ordered receptors'''
-            count = 0
-            while count < 10:
+            while True:
                 base_position = np.array([np.random.uniform(0, self.dimension), np.random.uniform(0, self.dimension), 0]) # 3D cube cartesian system - rectangular coordinates
                 if self.is_space_available_receptor(base_position):
                     break
-                count = count + 1
-            if (count == 10): raise RuntimeError("Receptors could not be created, dimensions may be too low or number of receptors too high") 
+                else:
+                    continue
             receptor = Receptor(receptor_id, base_position, receptor_length, self.dimension, binding_energy=self.binding_energy)  # create receptor
+            # print(f'Created {receptor_id}')
             self.agents.append(receptor)  # add agent to list of agents
 
     def is_space_available_receptor(self, attempt):  # makes sure new nanoparticles don't overlap existing ones
@@ -109,6 +138,7 @@ class Master:
 
     def run(self, steps):
         self.steric_potential = self.steric_potential()
+        # bound_number = []
         self.coverage = [0]
         self.time = 0
         plateau_count = 0
@@ -124,7 +154,18 @@ class Master:
             self.coverage.append(self.calculate_surface_coverage(bound_nanoparticles))
             if i == steps-1:  # or i == steps/2:
                 self.visualiser()
-        
+            # self.visualiser()
+            # if self.time > 100:
+            #     if len(self.coverage) > 2:
+            #         if (self.coverage[-1] - self.coverage[-2]) < 0.005:
+            #             plateau_count += 1
+            #     if plateau_count > 50:
+            #         self.visualiser()
+            #         break  # If data starts to plateau for 50 steps, then the experiment ends
+        #     bound_number.append(bound_nanoparticles)  # List of number of bound nanoparticles per step
+        # mean_bound = sum(bound_number) / len(bound_number)  # Mean number of bound nanoparticles throughout the experiment
+        # self.calculate_surface_coverage(mean_bound)
+
     def step(self):
         list_of_nanoparticle_arrays = list(np.random.normal(size=(self.number_of_nanoparticles, 3)))
         list_of_receptor_arrays = list(np.random.normal(size=(self.number_of_receptors, 3)))
@@ -136,9 +177,12 @@ class Master:
                 agent.step(self.nanoparticle_brownian(list_of_nanoparticle_arrays.pop()), nanoparticles_list)  # different movements for nanoparticle and its ligands
                 max_dist_to_react = self.nanoparticle_radius + self.ligand_length + self.receptor_length  # Loop only entered if Nanoparticle is close enough, i.e. receptor have a base position where z = 0
                 if agent.position[2] < max_dist_to_react:  # Reaction only possible only if the ligand is close enough to the in the z-axis to the receptor
+                    # print(f'{agent.agent_id} is interacting -------------------------------------------------------------------------------------------')
                     receptors = [x for x in self.agents if isinstance(x, Receptor) and x.bound is None]  # List of receptors that are not bound to a ligand
                     for r in receptors:
                         max_dist_to_react2 = self.nanoparticle_radius + self.ligand_length
+                        # print(f'{agent.agent_id} is interacting -------------------------------------------------------------------------------------------')
+                        # if linalg.norm(agent.position - r.position) < max_dist_to_react2:  # Loop only entered if Nanoparticle is close enough to receptors
                         if self.distance(agent.position, r.position) < max_dist_to_react2:  # Loop only entered if Nanoparticle is close enough to receptors
                             self.interaction_criteria(agent, r)  # if any agent meets interaction criteria with "agent"
             elif isinstance(agent, Receptor):
@@ -148,6 +192,8 @@ class Master:
                     nanoparticles = [x for x in self.agents if isinstance(x, Nanoparticle)]  # List of Nanoparticles
                     for n in nanoparticles:  # loop through agents again
                         max_dist_to_react2 = self.nanoparticle_radius + self.ligand_length
+                        # print(f'{agent.agent_id} is interacting -------------------------------------------------------------------------------------------')
+                        # if linalg.norm(agent.position - n.position) < max_dist_to_react2:  # Loop only entered if Nanoparticle is close enough to receptors
                         if self.distance(agent.position, n.position) < max_dist_to_react2:  # Loop only entered if Nanoparticle is close enough to receptors
                             self.interaction_criteria(n, agent)  # if any agent meets interaction criteria with "agent"
 
@@ -227,6 +273,7 @@ class Master:
         ax.scatter(x2, y2, z2, c='Green', s=350*(self.nanoparticle_radius/50))  # Bound
         ax.scatter(x4, y4, z4, c='Red', s=self.receptor_length, marker='1')  # Unbound
         ax.scatter(x5, y5, z5, c='Green', s=self.receptor_length, marker='1')  # Bound
+        # ax.scatter(x6, y6, z6, c='Blue', s=self.ligand_length, marker='1')  # Ligands
         ax.set_title('3D')
         ax.set_xlabel('X axis')
         ax.set_ylabel('Y axis')
@@ -235,6 +282,15 @@ class Master:
         ax.set_ylim(0, self.dimension)
         ax.set_zlim(0, self.dimension)
         plt.show()
+        '''2D'''
+        # plt.scatter(x1, y1, c='Red', s=2 * (self.nanoparticle_radius + self.ligand_length))
+        # plt.scatter(x2, y2, c='Green', s=2 * (self.nanoparticle_radius + self.ligand_length))
+        # plt.title('2D')
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.xlim(0, self.dimension)
+        # plt.ylim(0, self.dimension)
+        # plt.show()
 
     def nanoparticle_brownian(self, array):
         random_movement_cartesian = ((2 * ((1.38064852e-23 * 310.15) / (6 * pi * 8.9e-4 * (self.nanoparticle_radius * 1e-9)))) ** 0.5) * 1e9 * array
@@ -258,8 +314,13 @@ class Master:
             for ligand in ligands:
                 if ligand.bound is None and receptor.bound is None:  # Can only bind one receptor to one ligand at a time
                     distance = self.distance(ligand.position, receptor.position)
+                    # if np.allclose(ligand.position, receptor.position, self.nanoparticle_radius, self.nanoparticle_radius):  # true if same position, false otherwise
+                    # if distance <= self.nanoparticle_radius + self.ligand_length:  # true if close position, false otherwise
                     if distance <= 1:
+                        # print(f'Collision with {ligand.agent_id} of {agent1.agent_id} and {agent2.agent_id}')
+                        # if np.random.uniform(low=0, high=1) < (self.repulsive_potential(distance, 5 * self.ligand_length) + self.steric_potential):
                         if np.random.uniform(low=0, high=1) > exp(-self.binding_energy):
+                            # print(f'Reaction happened between {ligand.agent_id} of {nanoparticle.agent_id} and {receptor.agent_id}')
                             ligand.bound = receptor
                             receptor.bound = ligand
                             nanoparticle.bound = True
@@ -268,9 +329,9 @@ class Master:
                         else:
                             continue
 
-    # @staticmethod
-    # @njit(fastmath=True)
-    def distance(self, a, b):
+    @staticmethod
+    @njit(fastmath=True)
+    def distance(a, b):
         return linalg.norm(a - b)
 
     @staticmethod
@@ -287,15 +348,33 @@ class Master:
         return steric_potential
 
 
+# c = np.arange(50, 250, 50).tolist()
+# c = [10, 20, 30, 40, 50]
+c = [200]
+b = []
+# don't go over 10% volume fraction = 190 nanoparticles at 50 nm radius
+# 2500 (≈ 10^3.4) ligands max based on 50nm radius nanoparticle and 2 nm ligand
+# fix number of ligands, test for different numbers of ligands, plot data over time
+# See what situation is at 500 steps where all nanoparticles are supposedly bound
+
+# run with binding energy with 100 or 200 - so no bonds break - up to 1000
+# run with binding energy of 0 - check no bonds form
+# save the output data  ##############################
+# breakpoint on method that calculates if things are two close
+# method which compares particle positions to see if too close
+
+
+# see if graph eqilibriates
+# lower binding energy then plot
+# Plot against number of receptors
+#
 
 
 
 def experiment():
-    c = [200]
-    b = []
     for i in c:
         number_of_seconds = 3600  # i.e. 1 hour = 3600 seconds
-        my_model = Master(dimension=1000, binding_energy=200)
+        my_model = MyModel(dimension=1000, binding_energy=200)
         my_model.create_nanoparticles_and_ligands(number_of_nanoparticles=190, number_of_ligands=int(round(10 ** 2, 0)), nanoparticle_radius=50, ligand_length=7)  # 1-2 nm for ligand  # 95 particles
         my_model.create_receptors(number_of_receptors=1000, receptor_length=100)  # 100 nm for receptor
         print(f'{my_model.dimension} nm\u00b3 system, {my_model.binding_energy} binding energy\n'
@@ -303,20 +382,39 @@ def experiment():
               f'Ligand length {my_model.ligand_length} nm, {my_model.number_of_receptors} Receptors, {my_model.receptor_length} nm Receptor length')
         my_model.run(steps=number_of_seconds)  # 3600 for 1 hour
         print(f'There were {my_model.count} reactions')
+        # print(f'The surface coverage is {my_model.surface_coverage}')
+        # points = my_model.agent_position_dictionary
         '''Plot Time (Seconds) v surface coverage'''
         plt.subplot()
+        # plt.title(f'{my_model.number_of_nanoparticles} Nanoparticles, 10^{i} Ligands, Ligand length {my_model.ligand_length} nm, {my_model.number_of_receptors} Receptors')
         plt.title(f'{my_model.dimension} nm\u00b3 system, {my_model.binding_energy} binding energy\n'
                   f'{my_model.number_of_nanoparticles} Nanoparticles, {my_model.number_of_ligands} Ligands, {my_model.ligand_length} nm Ligand length \n'
                   f'{my_model.number_of_receptors} Receptors, {my_model.receptor_length} nm Receptor length')
         plt.xlabel('Time (Seconds)')
         plt.ylabel('Surface Coverage')
         plt.plot(list(range(0, my_model.time+1)), my_model.coverage, label=f'Nanoparticle radius {my_model.nanoparticle_radius} nm')
+        '''Plot log(Time) (Seconds) v surface coverage'''
+        # plt.subplot()
+        # plt.title(f'{my_model.number_of_nanoparticles} Nanoparticles, 10^{i} Ligands, {my_model.number_of_receptors} Receptors, Receptor length {my_model.receptor_length} nm')
+        # plt.xlabel('log(Time (seconds))')  # For log x-axis
+        # plt.ylabel('Surface Coverage')
+        # plt.plot([np.log10(i) for i in list(range(1, my_model.time+1))], my_model.coverage, label=f'Ligand length {my_model.ligand_length} nm')  # For log x-axi
+        '''Saving Data'''
+        # dictionary of lists
+        # dictionary = {'Time (Seconds)': list(range(1, my_model.time+1)), 'Surface Coverage': my_model.coverage}
+        # dictionary = {'log(Time) (Seconds)': [np.log10(i) for i in list(range(1, my_model.time+1)], 'Surface Coverage': b}  # For log x-axis
+        # df = pd.DataFrame(dictionary)
+        # saving the DataFrame
+        # df.to_csv('data12.CSV', index=False)
+        # my_model.nanoparticles_df.to_csv('data12_nanoparticles.CSV', index=False)
+        # my_model.receptors_df.to_csv('data12_receptors.CSV', index=False)
 
     leg = plt.legend(loc='best', ncol=2)
     leg.get_frame().set_alpha(0.5)
     plt.show()
 
 
+experiment()
 
 
 def stored_visualiser(dimensions, data):
@@ -350,3 +448,72 @@ def stored_visualiser(dimensions, data):
     ax.set_ylim(0, dimensions)
     ax.set_zlim(0, dimensions)
     plt.show()
+
+
+# stored_visualiser(dimensions=1000, data='data11points.CSV')
+
+'''Get graph from data'''
+# df = pd.read_csv('data12.CSV', header=0)
+# plt.title(f'Number of Ligands = 10^{2}')
+# plt.xlabel('Time (Seconds)')
+# plt.ylabel('Surface Coverage')
+# plt.plot(df['Time (Seconds)'], df['Surface Coverage'])
+# plt.show()
+''''''
+
+# attempts_for_mean = 1
+# for i in a:
+#     print(f'Number of Ligands = 10^{i}')
+#     surface_coverage = 0
+#     for j in range(attempts_for_mean):
+#         my_model = MyModel(dimension=1000)
+#         my_model.create_nanoparticles_and_ligands(number_of_nanoparticles=10, number_of_ligands=int(round(10 ** i, 0)), nanoparticle_radius=50, ligand_length=2)  # 1-2 nm for ligand
+#         print('Created Nanoparticles')
+#         my_model.create_receptors(number_of_receptors=1000, receptor_length=100)  # 100 nm for receptor
+#         print('Created Receptors')
+#         print('--Running model--')
+#         my_model.run(steps=5)  # 3600 for 1 hour
+#         print(f'There were {my_model.count} reactions')
+#         # print(f'The surface coverage is {my_model.surface_coverage}')
+#         surface_coverage += my_model.surface_coverage
+#     mean_surface_coverage = surface_coverage/attempts_for_mean
+#     print(f'The mean surface coverage is {mean_surface_coverage}')
+#     b.append(mean_surface_coverage)  # Mean surface coverage
+
+#
+# # dictionary of lists
+# dictionary = {'Log(Number of Ligands)': a, 'Surface Coverage': b}
+# df = pd.DataFrame(dictionary)
+# # saving the DataFrame
+# df.to_csv('data6.CSV', index=False)
+# print(df)
+#
+# # Plot Log(ligands) v surface coverage
+# plt.xlabel('Log(Number of Ligands)')
+# plt.ylabel('Surface Coverage')
+# plt.plot(a, b)
+# plt.show()
+#
+# print('Log Bases: ', a)
+# print('Surface Coverages: ', b)
+
+'''Repulsive Potential data plot'''
+# def repulsive_potential(distance, max_closeness):
+#     potential = 4 * 1 * (((max_closeness / distance) ** 12) - ((max_closeness / distance) ** 6))
+#     return potential
+#
+# nanoparticle_radius = 52  # Radius + ligand
+# separation = nanoparticle_radius * 2  # = 104 # separation between two Nanoparticles = Nanoparticle diameter including ligand = 104
+# max_closeness_ = separation + 0.5 * nanoparticle_radius  # = 130  # Arbitrary value representing van der Waals' radius
+#
+# a = []
+# # b = [140, 130, 120, 110, 100]
+# b = np.arange(10, 140, 1).tolist()
+#
+# for i in b:
+#     a.append(repulsive_potential(i, max_closeness_))
+#
+# plt.plot(b, a)
+# plt.xlabel('Distance')
+# plt.ylabel('Potential')
+# plt.show()
