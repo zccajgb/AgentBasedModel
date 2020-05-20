@@ -12,44 +12,45 @@ class Nanoparticle:  # inherits from agent
         self.position = nanoparticle_position_xyz
         self.time_unit = time_unit
         self.ligands = []
-        a = np.full(number_of_ligands, nanoparticle_radius)  # r
-        # b = np.full(number_of_ligands, 0)  # θ
-        # c = np.full(number_of_ligands, 0)  # Φ
-        b = np.random.uniform(low=0, high=(2 * pi), size=number_of_ligands)  # θ
-        c = np.random.uniform(low=0, high=pi, size=number_of_ligands)  # Φ
-        bases = []
-        for r, θ, Φ in np.nditer([a, b, c]):
-            bases.append(np.array([r, θ, Φ]))
-
-        d = np.full(number_of_ligands, ligand_length)  # r # for straight out stiff ligands
-        e = np.full(number_of_ligands, 0)  # θ
-        f = np.full(number_of_ligands, 0)  # Φ
-        # d = np.random.uniform(low=0, high=ligand_length, size=number_of_ligands)  # r
-        # e = np.random.uniform(low=0, high=(2 * pi), size=number_of_ligands)  # θ
-        # f = np.random.uniform(low=0, high=(0.5 * pi), size=number_of_ligands)  # Φ
-
-        tips = []
-        for r, θ, Φ in np.nditer([d, e, f]):  # iterate through  r, θ, Φ
-            tips.append(np.array([r, θ, Φ]))
-
-        for i in range(number_of_ligands):
-            base_array = bases.pop()
-            tip_array = tips.pop()
-            self.ligands.append(Ligand(i, agent_id, nanoparticle_position_xyz, nanoparticle_radius, ligand_length, base_array, tip_array, binding_energy, self.time_unit))
-
         self.nanoparticle_radius = nanoparticle_radius
         self.ligand_length = ligand_length
         self.bound = False
         self.dimension = dimension
         self.binding_energy = binding_energy
+        self.create_ligands()
 
-    def step(self, value, nanoparticle_list, receptor_list):  # values keeps the everything moving according to brownian motion
-        # """Convert spherical brownian coordinates into rectangular"""
-        # x = value[0] * sin(value[2]) * cos(value[1])
-        # y = value[0] * sin(value[2]) * sin(value[1])
-        # z = value[0] * cos(value[2])
-        # value_rectangular = np.array([x, y, z])
-        # value_rectangular = self.convert_spherical_to_rectangular(value)
+    def create_ligands(self):
+        a = np.full(self.number_of_ligands, self.nanoparticle_radius)  # r
+        b = np.random.uniform(low=0, high=(2 * pi), size=self.number_of_ligands)  # θ
+        c = np.random.uniform(low=0, high=pi, size=self.number_of_ligands)  # Φ
+        bases = []
+        for r, θ, Φ in np.nditer([a, b, c]):
+            bases.append(np.array([r, θ, Φ]))
+
+        d = np.random.uniform(low=0, high=self.ligand_length, size=self.number_of_ligands)  # r
+        e = np.random.uniform(low=0, high=(2 * pi), size=self.number_of_ligands)  # θ
+        f = np.random.uniform(low=0, high=(0.5 * pi), size=self.number_of_ligands)  # Φ
+        tips = []
+        for r, θ, Φ in np.nditer([d, e, f]):  # iterate through  r, θ, Φ
+            tips.append(np.array([r, θ, Φ]))
+
+        for i in range(self.number_of_ligands):
+            base_array = bases.pop()
+            tip_array = tips.pop()
+            self.ligands.append(
+                Ligand(i, self.agent_id, self.position, self.nanoparticle_radius, self.ligand_length, base_array,
+                       tip_array, self.binding_energy, self.time_unit))
+
+    @staticmethod
+    @njit(fastmath=True)
+    def convert_spherical_to_rectangular(array):
+        x = array[0] * sin(array[2]) * cos(array[1])
+        y = array[0] * sin(array[2]) * sin(array[1])
+        z = array[0] * cos(array[2])  # z value of tip
+        return np.array([x, y, z])
+
+    def step(self, value, nanoparticle_list,
+             receptor_list):  # values keeps the everything moving according to brownian motion
         attempt = self.position + value  # value_rectangular
         true_attempt = self.get_absolute_position(attempt)
         freedom = self.is_space_available(nanoparticle_list, receptor_list, true_attempt)
@@ -101,7 +102,8 @@ class Nanoparticle:  # inherits from agent
             distance = self.distance(attempt, i)
             if distance >= separation1:  # Checks that if the nanoparticle is a certain distance from the other nanoparticles
                 if distance <= max_closeness1:  # Checks if close enough for repulsive potential
-                    if np.random.uniform(low=0, high=1) < exp(-self.repulsive_potential(distance, max_closeness1)):  # If there is repulsion then check  # tolerable_potential:
+                    if np.random.uniform(low=0, high=1) < exp(-self.repulsive_potential(distance,
+                                                                                        max_closeness1)):  # If there is repulsion then check  # tolerable_potential:
                         count += 1
                     else:
                         return False  # Repulsive potential not exceeded
@@ -110,14 +112,15 @@ class Nanoparticle:  # inherits from agent
             elif distance < separation1:
                 return False
         if count == len(nanoparticle_list):
-            separation2 = self.nanoparticle_radius  # nanoparticle must be at least a radius away from receptor
+            separation2 = self.nanoparticle_radius  # + self.ligand_length  # nanoparticle must be at least a radius away from receptor
             max_closeness2 = separation2 + 0.5 * self.nanoparticle_radius  # van der Waals' radius = 0.5 x separation
             count = 0
             for i in receptor_list:
                 distance = self.distance(attempt, i)
                 if distance >= separation2:  # Checks that if the nanoparticle is a certain distance from the other nanoparticles
                     if distance <= max_closeness2:  # Checks if close enough for repulsive potential
-                        if np.random.uniform(low=0, high=1) < exp(0 * -self.repulsive_potential(distance, max_closeness2)):  # If there is repulsion then check  # tolerable_potential:
+                        if np.random.uniform(low=0, high=1) < exp(0 * -self.repulsive_potential(distance,
+                                                                                                max_closeness2)):  # If there is repulsion then check  # tolerable_potential:
                             count += 1
                         else:
                             return False  # Repulsive potential not exceeded
@@ -135,14 +138,13 @@ class Nanoparticle:  # inherits from agent
 
     @staticmethod
     def repulsive_potential(distance, max_closeness):
-        potential = 4 * 1 * ((max_closeness / distance) ** 12 - (max_closeness / distance) ** 6)
+        potential = 4 * 0.161 * ((max_closeness / distance) ** 12 - (max_closeness / distance) ** 6)
         return potential
 
     def get_absolute_position(self, absolute_position):
         """Keeping nanoparticle in the system"""
         max_abs_position = self.dimension - (self.nanoparticle_radius + self.ligand_length)
         for i in range(3):
-            # while not (self.nanoparticle_radius + self.ligand_length) <= absolute_position[i] <= max_abs_position:
             while not self.nanoparticle_radius + self.ligand_length <= absolute_position[i] <= max_abs_position:
                 if absolute_position[i] < 0:
                     absolute_position[i] = abs(absolute_position[i])
