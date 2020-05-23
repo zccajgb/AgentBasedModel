@@ -110,7 +110,7 @@ class Receptor:
         value_rectangular = np.array([x, y, 0])
         attempt_base = self.base_position + value_rectangular
         attempt_base[2] = 0
-        attempt = self.get_absolute_position(attempt_tip, attempt_base)
+        self.get_absolute_position(attempt_tip, attempt_base)
         # print(f"{self.agent_id} base moved to position {self.base_position}")  # To see base position
         # print(f"{self.agent_id} tip moved to position {self.tip_position}")  # To see tip spherical position
         # print(f"{self.agent_id} moved to position {self.position}")
