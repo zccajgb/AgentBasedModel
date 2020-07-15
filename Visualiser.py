@@ -36,7 +36,7 @@ def visualiser(model):
     agent_receptors_dictionary = {'Points': 'Bound'}
     for agent in model.agents:
         if isinstance(agent, Receptor):
-            model.agent_receptors_dictionary[tuple(agent.position.tolist())] = agent.bound
+            agent_receptors_dictionary[tuple(agent.position.tolist())] = agent.bound
     receptors = [agent for agent in model.agents if isinstance(agent, Receptor)]
     x3 = [i.position[0] for i in receptors]
     y3 = [i.position[1] for i in receptors]

@@ -1,13 +1,13 @@
+from operator import is_
 import numpy as np
+from LigandModel import Ligand
 from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arccos as acos, exp as exp
-from numba import njit
-
 
 class Receptor:
     def __init__(self, agent_id, base_position, receptor_length, dimension, binding_energy, nanoparticle_radius, ligand_length):
         self.agent_id = agent_id
         self.base_position = base_position
-        '''spherical coordinates in the format(r,θ,Φ), for the space in a hemisphere of radius 1: r <= 1, 0<= θ <=2π, 0<= Φ <= 0.5π'''
+        '''spherical coordinates in the format(r,theta,phi), for the space in a hemisphere of radius 1: r <= 1, 0<= theta <=2π, 0<= phi <= 0.5π'''
         self.tip_position = np.array(
                 [np.random.uniform(0, receptor_length), np.random.uniform(0, (2 * pi)), np.random.uniform(0, (0.5 * pi))])
         self.temp_tip = None
@@ -20,7 +20,7 @@ class Receptor:
         # z = self.tip_position[0] * cos(self.tip_position[2])
         # '''Equations from: https://math.libretexts.org/Bookshelves/Calculus/Book%3A_Calculus_(OpenStax)/12%3A_Vectors_in_Space/12.7%3A_Cylindrical_and_Spherical_Coordinates'''
         # tip_position_rectangular = np.array([x, y, z])
-        tip_position_rectangular = self.convert_spherical_to_rectangular(self.tip_position)
+        tip_position_rectangular = self._convert_to_cartesean(self.tip_position)
         self.binding_energy = binding_energy
         self.nanoparticle_radius = nanoparticle_radius
         self.ligand_length = ligand_length
@@ -38,82 +38,62 @@ class Receptor:
         self.position = absolute_position
         self.dimension = dimension
 
-    @staticmethod
-    @njit(fastmath=True)
-    def convert_spherical_to_rectangular(array):
+    def _convert_to_cartesean(array):
         x = array[0] * sin(array[2]) * cos(array[1])
         y = array[0] * sin(array[2]) * sin(array[1])
         z = array[0] * cos(array[2])  # z value of tip
         return np.array([x, y, z])
 
-    @staticmethod
-    @njit(fastmath=True)
-    def convert_rectangular_to_spherical(array):
+    def _convert_to_spherical(array):
         r = (array[0] ** 2 + array[1] ** 2 + array[
             2] ** 2) ** 0.5
-        θ = atan(array[1] / array[0])
-        Φ = acos(array[2] / r)
-        return np.array([r, θ, Φ])
+        theta = atan(array[1] / array[0])
+        phi = acos(array[2] / r)
+        return np.array([r, theta, phi])
 
-    '''Alternate step functions, one with and without movement'''
-    '''With Movement'''
     def step(self, value, receptors_list, nanoparticle_list):
         self.move(value)
-        freedom = self.is_space_available(receptors_list, nanoparticle_list)
-        if freedom:
-            if isinstance(self.bound, Ligand):  # If it is bound to a ligand
-                # distance = linalg.norm(self.bound.nanoparticle_position - attempt)
-                distance = self.distance(self.bound.ligand_base_position, self.temp_position)
-                inside_radius = (distance <= self.bound.ligand_length)
-                '''Returns True if inside and False if outside'''
-                if inside_radius:
-                    self.position = self.temp_position
-                    self.tip_position = self.temp_tip
-                    self.base_position = self.temp_base
-                    # self.bound.position = self.position
-                    # self.bound.ligand_tip_position = self.convert_rectangular_to_spherical(self.position - self.bound.ligand_base_position - self.bound.nanoparticle_position)
-                    # print(self.bound.ligand_tip_position)
-                    # print(f"{self.agent_id} moved to position {self.position} and remained bound to {self.bound.agent_id}")
-                    return self.position
-                else:  # If movement outside radius
-                    # if np.random.normal() < exp(-1):  # Bond gets broken
-                    if np.random.uniform(low=0, high=1) < exp(-self.binding_energy):  # Bond gets broken
-                        self.position = self.temp_position
-                        self.tip_position = self.temp_tip
-                        self.base_position = self.temp_base
-                        # print(f'Bond broken between {self.bound.agent_id} of {self.bound.nanoparticle_id} and {self.agent_id}')
-                        # print(f"{self.agent_id} moved to position {self.position}")
-                        self.bound.bound = None
-                        self.bound = None
-                        return self.position
-                    else:
-                        # print(f'{self.agent_id} stayed at {self.position} and {self.bound.agent_id} of {self.bound.nanoparticle_id} stayed at {self.bound.position}')
-                        return self.position
-            else:
-                self.position = self.temp_position
-                self.tip_position = self.temp_tip
-                self.base_position = self.temp_base
-                # print(f"{self.agent_id} moved to position {self.position}")
-                return self.position
+        if self.is_space_available(receptors_list, nanoparticle_list):
+            is_move_denied, is_bond_broken = _decide_on_move()
+            if not is_move_denied:
+                self._accept_move()
+            if is_bond_broken:
+                self.bound.bound = None
+                self.bound = None
+            return self.position
 
-    @staticmethod
-    @njit(fastmath=True)
-    def distance(a, b):
+    def _decide_on_move(self):
+        is_bound = isinstance(self.bound, Ligand)
+        is_move_denied = False
+        is_bond_broken = False
+        if is_bound:
+            distance = self._calculate_distance(self.bound.ligand_base_position, self.temp_position)
+            has_moved_far_enough_to_break_bound = distance <= self.bound.ligand_length
+            metropolis_result = self._metropolis_algorithm_for_bond_breaking()
+            is_move_denied = is_bound and has_moved_far_enough_to_break_bound and not metropolis_result
+            is_bond_broken = is_bound and has_moved_far_enough_to_break_bound and metropolis_result
+        return is_move_denied, is_bond_broken
+
+    def _accept_move(self):
+            self.position = self.temp_position
+            self.tip_position = self.temp_tip
+            self.base_position = self.temp_base
+
+    def _metropolis_algorithm_for_bond_breaking():
+        return np.random.uniform(low=0, high=1) < exp(-self.binding_energy)
+
+    def _calculate_distance(a, b):
         return linalg.norm(a - b)
 
-    def move(self, value):
-        attempt_tip = self.tip_position + value  # updates tip_position
-        '''Convert spherical brownian coordinates into rectangular just for x and y, z doesn't
-        matter as always 0 as the receptor is not moving vertically, i.e. stuck to a surface'''
-        x = value[0] * sin(value[2]) * cos(value[1])
-        y = value[0] * sin(value[2]) * sin(value[1])
-        value_rectangular = np.array([x, y, 0])
-        attempt_base = self.base_position + value_rectangular
-        attempt_base[2] = 0
+    def move(self, amount_to_move):
+        #TODO this shouldn't use the same value for both movements. The movement should probably be generated here.
+        attempt_tip = self.tip_position + amount_to_move  # updates tip_position
+
+        cartesean_amount_to_move = _convert_to_cartesean(amount_to_move)
+
+        attempt_base = self.base_position + cartesean_amount_to_move
+        attempt_base[2] = 0 #shouldn't leave the surface
         self.get_absolute_position(attempt_tip, attempt_base)
-        # print(f"{self.agent_id} base moved to position {self.base_position}")  # To see base position
-        # print(f"{self.agent_id} tip moved to position {self.tip_position}")  # To see tip spherical position
-        # print(f"{self.agent_id} moved to position {self.position}")
 
     def get_absolute_position(self, attempt_tip, attempt_base):  # Returns absolute position and maintains position in hemisphere
         """If numba package not installed"""
@@ -197,7 +177,7 @@ class Receptor:
             if 0 < attempt_tip[1] < pi:
                 attempt_tip[1] += pi
         self.temp_tip = attempt_tip
-        attempt_tip_position_rectangular = self.convert_spherical_to_rectangular(attempt_tip)
+        attempt_tip_position_rectangular = self._convert_to_cartesean(attempt_tip)
         absolute_position = attempt_tip_position_rectangular + attempt_base  # Adding base and tip position
         self.temp_position = absolute_position
 
@@ -206,10 +186,10 @@ class Receptor:
         max_closeness1 = separation1 + 0.5 * separation1  # van der Waals' radius = 0.5 x separation
         count = 0
         for i in receptors_list:
-            distance = self.distance(self.temp_position, i)
+            distance = self._calculate_distance(self.temp_position, i)
             if distance >= separation1:  # Checks that if the receptor is a certain distance from the other receptors
                 if distance <= max_closeness1:  # Checks if close enough for repulsive potential
-                    if np.random.uniform(low=0, high=1) < exp(-self.repulsive_potential(distance, max_closeness1)):  # If there is repulsion then check  # tolerable_potential:
+                    if np.random.uniform(low=0, high=1) < exp(-self._repulsive_potential(distance, max_closeness1)):  # If there is repulsion then check  # tolerable_potential:
                         count += 1
                     else:
                         return False  # Repulsive potential not exceeded
@@ -222,10 +202,10 @@ class Receptor:
             max_closeness2 = separation2 + 0.5 * separation2  # van der Waals' radius = 0.5 x separation
             count = 0
             for i in nanoparticle_list:
-                distance = self.distance(self.temp_position, i)
+                distance = self._calculate_distance(self.temp_position, i)
                 if distance >= separation2:  # Checks that if the receptor is a certain distance from the other nanoparticles
                     if distance <= max_closeness2:  # Checks if close enough for repulsive potential
-                        if np.random.uniform(low=0, high=1) < exp(0 * -self.repulsive_potential(distance, max_closeness2)):  # If there is repulsion then check  # tolerable_potential:
+                        if np.random.uniform(low=0, high=1) < exp(0 * -self._repulsive_potential(distance, max_closeness2)):  # If there is repulsion then check  # tolerable_potential:
                             count += 1
                         else:
                             return False  # Repulsive potential not exceeded
@@ -235,11 +215,10 @@ class Receptor:
                     return False
             if count == len(nanoparticle_list):
                 return True  # Returns True when there is space available
-
-    @staticmethod
-    def repulsive_potential(distance, max_closeness):
+    
+    def _repulsive_potential(distance, max_closeness):
         potential = 4 * 1 * ((max_closeness / distance) ** 12 - (max_closeness / distance) ** 6)
         return potential
 
 
-from LigandModel import Ligand
+

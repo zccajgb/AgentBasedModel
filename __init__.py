@@ -14,7 +14,7 @@ def binding_energy():
     for i in d:
         variable_finals = []
         for _ in range(3):
-            number_of_seconds = 1000  # i.e. 1 hour = 3600 seconds
+            number_of_seconds = 1  # i.e. 1 hour = 3600 seconds
             model = Master(dimension=1000, binding_energy=int(i), time_unit=10e-3, number_of_receptors=1000, receptor_length=100,
                                number_of_nanoparticles=190, nanoparticle_radius=50, number_of_ligands=100, ligand_length=7, binding_distance=4)
             model.create_receptors()  # 100 nm for receptor
@@ -56,7 +56,7 @@ def number_of_receptors():
     time_data = []
     for i in d:
         variable_finals = []
-        for j in range(3):
+        for _ in range(3):
             number_of_seconds = 1000  # i.e. 1 hour = 3600 seconds
             model = Master(dimension=1000, binding_energy=25, time_unit=10e-3, number_of_receptors=int(i),
                                receptor_length=100,
@@ -407,3 +407,6 @@ def second_variable_plot(x, y, list1, list2, errors):
     errors.insert(0, 0)
     plt.errorbar(list1, list2, yerr=errors)
     plt.show()
+
+if __name__=="__main__":
+    binding_energy()
