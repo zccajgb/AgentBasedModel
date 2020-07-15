@@ -15,15 +15,14 @@ def binding_energy():
         variable_finals = []
         for _ in range(3):
             number_of_seconds = 1  # i.e. 1 hour = 3600 seconds
-            model = Master(dimension=1000, binding_energy=int(i), time_unit=10e-3, number_of_receptors=1000, receptor_length=100,
-                               number_of_nanoparticles=190, nanoparticle_radius=50, number_of_ligands=100, ligand_length=7, binding_distance=4, receptor_radius=3)
+            model = Master(dimension=1000, binding_energy=int(i), time_unit=10e-3, number_of_receptors=2, receptor_length=100,
+                               number_of_nanoparticles=1, nanoparticle_radius=50, number_of_ligands=2, ligand_length=7, binding_distance=4, receptor_radius=3, ligand_radius=3, cell_diffusion_coef=1)
             model.create_receptors()  # 100 nm for receptor
             model.create_nanoparticles_and_ligands()  # 1-2 nm for ligand  # 95 particles
             print(f'{model.dimension/1000} μm\u00b3 system, {model.binding_energy} binding energy, {model.number_of_nanoparticles} Nanoparticles,\n'
                   f'{model.nanoparticle_radius} nm Nanoparticle Radius, {model.number_of_ligands} Ligands, Ligand length {model.ligand_length} nm,\n'
                   f'{model.number_of_receptors} Receptors, {model.receptor_length} nm Receptor length, {model.binding_distance} Binding distance')
             model.run(steps=number_of_seconds)  # 3600 for 1 hour
-            print(f'There were {model.count} reactions')
             print(f'The surface coverage is {model.surface_coverage}')
             variable_finals.append(model.surface_coverage)
             time_data.append(np.array(model.coverage))
@@ -61,7 +60,7 @@ def number_of_receptors():
             model = Master(dimension=1000, binding_energy=25, time_unit=10e-3, number_of_receptors=int(i),
                                receptor_length=100,
                                number_of_nanoparticles=190, nanoparticle_radius=50, number_of_ligands=100,
-                               ligand_length=7, binding_distance=4)
+                               ligand_length=7, lbinding_distance=4)
             model.create_receptors()  # 100 nm for receptor
             model.create_nanoparticles_and_ligands()  # 1-2 nm for ligand  # 95 particles
             print(f'{model.dimension / 1000} μm\u00b3 system, {model.binding_energy} binding energy, {model.number_of_nanoparticles} Nanoparticles,\n'

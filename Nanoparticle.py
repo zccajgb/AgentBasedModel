@@ -5,7 +5,7 @@ from Ligand import Ligand
 
 
 class Nanoparticle(BaseAgent):
-    def __init__(self, agent_id, nanoparticle_position_xyz, number_of_ligands, nanoparticle_radius, ligand_length, dimension, binding_energy, time_unit):
+    def __init__(self, agent_id, nanoparticle_position_xyz, number_of_ligands, nanoparticle_radius, ligand_length, dimension, binding_energy, ligand_radius, receptor_radius, time_unit):
         self.number_of_ligands = number_of_ligands
         self.agent_id = agent_id
         self.position = nanoparticle_position_xyz
@@ -16,6 +16,8 @@ class Nanoparticle(BaseAgent):
         self.bound = False
         self.dimension = dimension
         self.binding_energy = binding_energy
+        self.ligand_radius = ligand_radius
+        self.receptor_radius = receptor_radius
         self.weighted_diffusion_coef = ((2 * ((1.38064852e-23 * 310.15) / (6 * np.pi * 8.9e-4 * (self.nanoparticle_radius * 1e-9)))) ** 0.5) * 1e9 * time_unit
         self.create_ligands()
 
@@ -31,11 +33,11 @@ class Nanoparticle(BaseAgent):
         tips = [np.array([r, theta, phi]) for r, theta, phi in np.nditer([tip_r_list, tip_theta_list, tip_phi_list])]
 
         for i in range(self.number_of_ligands):
-            ligand = Ligand(i, self.agent_id, self.position, self.nanoparticle_radius, self.ligand_length, bases.pop(), tips.pop(), self.binding_energy, self.time_unit)
+            ligand = Ligand(i, self.agent_id, self.position, self.nanoparticle_radius, self.ligand_length, bases.pop(), tips.pop(), self.binding_energy, self.ligand_radius, self.time_unit)
             self.ligands.append(ligand)
 
     def move(self, random_array, nanoparticle_list, receptor_list):
-        distance_to_move = self.self._brownian_motion(self.weighted_diffusion_coef, random_array)
+        distance_to_move = self._brownian_motion(self.weighted_diffusion_coef, random_array)
         new_position = self.position + distance_to_move
         new_position = self._apply_boundary_conditions(new_position)
         if(self._check_space_available(nanoparticle_list, receptor_list, new_position)):
@@ -44,7 +46,7 @@ class Nanoparticle(BaseAgent):
     def step(self, random_array, nanoparticle_list, receptor_list):
         if not self.bound:
             self.move(random_array, nanoparticle_list, receptor_list)
-        random_number_list = np.random.normal(size=(self.number_of_ligands, 3))
+        random_number_list = list(np.random.normal(size=(self.number_of_ligands, 3)))
         [x.step(random_number_list.pop(), self.position) for x in self.ligands]
         self.bound = any([ligand.bound is not None for ligand in self.ligands])
         return self.position

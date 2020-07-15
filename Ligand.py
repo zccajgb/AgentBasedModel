@@ -4,7 +4,7 @@ from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arcc
 from BaseAgent import BaseAgent
 
 class Ligand(BaseAgent):
-    def __init__(self, agent_id, nanoparticle_id, nanoparticle_position, nanoparticle_radius, ligand_length, base_array, tip_array, binding_energy, time_unit):
+    def __init__(self, agent_id, nanoparticle_id, nanoparticle_position, nanoparticle_radius, ligand_length, base_array, tip_array, binding_energy, ligand_radius, time_unit):
         self.agent_id = f'Ligand {agent_id}'
         self.base_position = base_array
         self.tip_position = tip_array
@@ -12,6 +12,7 @@ class Ligand(BaseAgent):
         self.nanoparticle_id = nanoparticle_id
         self.ligand_length = ligand_length
         self.nanoparticle_radius = nanoparticle_radius
+        self.ligand_radius = ligand_radius
         self.total_radius = nanoparticle_radius + ligand_length
         self.binding_energy = binding_energy
         self.time_unit = time_unit
@@ -19,7 +20,7 @@ class Ligand(BaseAgent):
         self.bound = None
         
         self.weighted_diffusion_coef = ((2 * ((1.38064852e-23 * 310.15) / (6 * pi * 8.9e-4 * (self.ligand_radius * 1e-9)))) ** 0.5) * 1e9 * self.time_unit
-        self.base_position = self.convert_spherical_to_rectangular(self.base_position)        
+        self.base_position = self._convert_to_cartesean(self.base_position)        
         self.absolute_position = self._get_absolute_position(self.tip_position, self.nanoparticle_position)
 
     def step(self, value, nanoparticle_position):
@@ -34,7 +35,7 @@ class Ligand(BaseAgent):
             self.move(value, nanoparticle_position)
 
     def move(self, value, nanoparticle_position):
-        new_tip_position = self.tip_position + self.brownian_motion(value)
+        new_tip_position = self.tip_position + self._brownian_motion(self.weighted_diffusion_coef, value)
         new_tip_position[0] = self._reflective_boundary_condition(new_tip_position[0], self.ligand_length)
         new_absolute_position = self._get_absolute_position(new_tip_position, nanoparticle_position)
         self.tip_position = new_tip_position

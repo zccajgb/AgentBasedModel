@@ -5,7 +5,7 @@ from Ligand import Ligand
 from BaseAgent import BaseAgent
 
 class Receptor(BaseAgent):
-    def __init__(self, agent_id, base_position, receptor_length, dimension, binding_energy, nanoparticle_radius, ligand_length, cell_diffusion_coeff):
+    def __init__(self, agent_id, base_position, receptor_length, dimension, binding_energy, nanoparticle_radius, ligand_length, cell_diffusion_coeff, receptor_radius, time_unit):
         self.agent_id = agent_id
         self.base_position = base_position
         self.binding_energy = binding_energy
@@ -13,6 +13,8 @@ class Receptor(BaseAgent):
         self.ligand_length = ligand_length
         self.dimension = dimension
         self.receptor_length = receptor_length           
+        self.receptor_radius = receptor_radius
+        self.time_unit = time_unit
         self.temp_tip = None
         self.bound = None
         self.weighted_diffusion_coef_tip = ((2 * ((1.38064852e-23 * 310.15) / (6 * np.pi * 8.9e-4 * (self.receptor_radius * 1e-9)))) ** 0.5) * 1e9 * self.time_unit
@@ -26,7 +28,7 @@ class Receptor(BaseAgent):
     def step(self, random_array_base, random_array_tip, receptors_list, nanoparticle_list):
         
         self.move(random_array_base, random_array_tip)
-        if self.is_space_available(receptors_list, nanoparticle_list):
+        if self._check_space_available(receptors_list, nanoparticle_list):
             is_move_denied, is_bond_broken = self._decide_on_move()
             if not is_move_denied:
                 self._accept_move()
@@ -64,7 +66,7 @@ class Receptor(BaseAgent):
         self.tip_position = self.temp_tip
         self.base_position = self.temp_base
 
-    def _is_in_range(position, boundaries):
+    def _is_in_range(self, position, boundaries):
         for (p, b) in zip(position, boundaries):
             if p < 0: return False
             if p > b: return False

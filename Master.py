@@ -25,7 +25,7 @@ class Master(BaseAgent):
             iv) try_to_bind: this is called when a ligand and receptor are close to each other, and sees if they can form a bond.
     '''
     def __init__(self, dimension, binding_energy, time_unit, number_of_receptors, receptor_length, number_of_nanoparticles,
-                 nanoparticle_radius, number_of_ligands, ligand_length, binding_distance, receptor_radius):
+                 nanoparticle_radius, number_of_ligands, ligand_length, binding_distance, receptor_radius, ligand_radius, cell_diffusion_coef):
         self.agents = []  # create an empty list of agents
         self.dimension = dimension
         self.points = []
@@ -39,10 +39,12 @@ class Master(BaseAgent):
         self.ligand_length = ligand_length
         self.binding_distance = binding_distance
         self.receptor_radius = receptor_radius
+        self.ligand_radius = ligand_radius
         self.collision = False
         self.coverage = [0]
         self.time = 0
         self.bound_nanoparticles = 0
+        self.cell_diffusion_coef = cell_diffusion_coef
 
     def create_nanoparticles_and_ligands(self): 
         total_radius = self.nanoparticle_radius + self.ligand_length  
@@ -51,8 +53,8 @@ class Master(BaseAgent):
             agent_id = f'Nanoparticle {i}'
             nanoparticle_cartesean_position = self._initialise_nanoparticle_position(total_radius, upper_limit)
             nanoparticle = Nanoparticle(agent_id, nanoparticle_cartesean_position, self.number_of_ligands, self.nanoparticle_radius,
-                                        self.ligand_length, self.dimension, binding_energy=self.binding_energy,
-                                        time_unit=self.time_unit)
+                                        self.ligand_length, self.dimension, binding_energy=self.binding_energy, ligand_radius=self.ligand_radius, 
+                                        receptor_radius=self.receptor_radius, time_unit=self.time_unit)
             
             self.agents.append(nanoparticle) 
 
@@ -61,7 +63,7 @@ class Master(BaseAgent):
         for i in range(self.number_of_receptors):  
             receptor_id = f'Receptor {i}'
             base_position = np.array([np.random.uniform(self.receptor_length, self.dimension - self.receptor_length), np.random.uniform(self.receptor_length, self.dimension - self.receptor_length), 0]) 
-            receptor = Receptor(receptor_id, base_position, self.receptor_length, self.dimension, self.binding_energy, self.nanoparticle_radius, self.ligand_length)
+            receptor = Receptor(receptor_id, base_position, self.receptor_length, self.dimension, self.binding_energy, self.nanoparticle_radius, self.ligand_length, self.cell_diffusion_coef, self.receptor_radius, self.time_unit)
             self.agents.append(receptor) 
     
     def run(self, steps):
@@ -73,7 +75,7 @@ class Master(BaseAgent):
                 if isinstance(agent, Nanoparticle):
                     if agent.bound:
                         self.bound_nanoparticles += 1
-            self.coverage.append(self.calculate_surface_coverage(self.bound_nanoparticles))
+            self.coverage.append(self._calculate_surface_coverage(self.bound_nanoparticles))
             
         # visualiser(self)
         number_of_bound_receptors = 0
@@ -106,7 +108,7 @@ class Master(BaseAgent):
                 else:
                     nanoparticles = [n for n in self.agents if isinstance(n, Nanoparticle)]
                     for n in nanoparticles:
-                        is_receptor_close_enough_to_react = self.distance(agent.position, n.position) < max_seperation_for_receptor_to_react
+                        is_receptor_close_enough_to_react = self._calculate_distance(agent.position, n.position) < max_seperation_for_receptor_to_react
                         if is_receptor_close_enough_to_react:
                             self.try_to_bind(n, agent)
 
@@ -120,7 +122,7 @@ class Master(BaseAgent):
             is_ligand_already_bound = ligand.bound is not None
             if is_ligand_already_bound: continue
 
-            is_too_far_away_to_bind = self.distance(ligand.position, receptor.position) > self.binding_distance
+            is_too_far_away_to_bind = self._calculate_distance(ligand.position, receptor.position) > self.binding_distance
             if is_too_far_away_to_bind: continue
                 
             if self._metropolis_algorithm_for_binding(self.binding_energy):
@@ -137,7 +139,7 @@ class Master(BaseAgent):
     def _initialise_nanoparticle_position(self, total_radius, upper_limit):
         while True:
             nanoparticle_cartesean_position = np.array([np.random.uniform(total_radius, upper_limit), np.random.uniform(total_radius, upper_limit),np.random.uniform(total_radius, upper_limit)])  # 3D cube cartesian system - rectangular coordinates
-            if self._check_space_available_nanoparticle(nanoparticle_cartesean_position):
+            if self._check_space_available(nanoparticle_cartesean_position, self.nanoparticle_radius):
                 break
         return nanoparticle_cartesean_position
         
@@ -147,7 +149,7 @@ class Master(BaseAgent):
         min_allowed_separation_nanoparticles = self.nanoparticle_radius + self.ligand_length + current_agent_radius
       
         for i in nanoparticle_positions:
-            seperation = self.distance(current_agent_position, i)
+            seperation = self._calculate_distance(current_agent_position, i)
             is_nanoparticle_too_close = seperation < min_allowed_separation_nanoparticles
             if is_nanoparticle_too_close:
                 return False
@@ -155,7 +157,7 @@ class Master(BaseAgent):
         receptor_positions = [agent.position for agent in self.agents if isinstance(agent, Receptor)]
         min_allowed_seperation_receptors = self.receptor_radius + current_agent_radius
         for i in receptor_positions:
-            seperation = self.distance(current_agent_position, i)
+            seperation = self._calculate_distance(current_agent_position, i)
             is_nanoparticle_too_close_to_receptors = seperation < min_allowed_seperation_receptors
             if is_nanoparticle_too_close_to_receptors:
                 return False 
