@@ -1,6 +1,3 @@
-from .vscode..ropeproject.config import set_prefs
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arccos as acos, exp as exp
 from ReceptorModel import Receptor
@@ -52,8 +49,8 @@ class Master:
         upper_limit = self.dimension - total_radius
         for i in range(self.number_of_nanoparticles):
             agent_id = f'Nanoparticle {i}'
-            nanoparticle_cartesean_position = _initialise_nanoparticle_position(total_radius, upper_limit)
-            nanoparticle = Nanoparticle(agent_id, nanoparticle_position_xyz, self.number_of_ligands, self.nanoparticle_radius,
+            nanoparticle_cartesean_position = self._initialise_nanoparticle_position(total_radius, upper_limit)
+            nanoparticle = Nanoparticle(agent_id, nanoparticle_cartesean_position, self.number_of_ligands, self.nanoparticle_radius,
                                         self.ligand_length, self.dimension, binding_energy=self.binding_energy,
                                         time_unit=self.time_unit)
             
@@ -63,7 +60,7 @@ class Master:
         #TODO there is nothing that stops two receptors being created arbitrarily close to each other
         for i in range(self.number_of_receptors):  
             receptor_id = f'Receptor {i}'
-            base_position = np.array([np.random.uniform(0, self.dimension), np.random.uniform(0, self.dimension), 0]) 
+            base_position = np.array([np.random.uniform(self.receptor_length, self.dimension - self.receptor_length), np.random.uniform(self.receptor_length, self.dimension - self.receptor_length), 0]) 
             receptor = Receptor(receptor_id, base_position, self.receptor_length, self.dimension, self.binding_energy, self.nanoparticle_radius, self.ligand_length)
             self.agents.append(receptor) 
     
@@ -76,13 +73,13 @@ class Master:
                 if isinstance(agent, Nanoparticle):
                     if agent.bound:
                         self.bound_nanoparticles += 1
-            self.coverage.append(self.calculate_surface_coverage(bound_nanoparticles))
+            self.coverage.append(self.calculate_surface_coverage(self.bound_nanoparticles))
             
         # visualiser(self)
         self.calculate_surface_coverage(self.bound_nanoparticles) #TODO maybe remove this line
         number_of_bound_receptors = 0
         for i in self.agents:
-            elif isinstance(i, Receptor) and i.bound is not None:
+            if isinstance(i, Receptor) and i.bound is not None:
                 number_of_bound_receptors += 1
         print(f'There are {self.bound_nanoparticles} nanoparticles bound to the surface')
         print(f'There are {number_of_bound_receptors} receptors bound to nanoparticles')
@@ -114,7 +111,7 @@ class Master:
                         self.try_to_bind(agent, r)
             
             elif isinstance(agent, Receptor):
-                receptors_except_current = [receptor_position for receptor_position in.receptor_positions if receptor_position is not agent.position] 
+                receptors_except_current = [receptor_position for receptor_position in receptor_positions if receptor_position is not agent.position] 
                 agent.step(self.receptor_brownian(next_random_number), receptors_except_current, nanoparticle_positions) #TODO move brownian to receptor_step
                 
                 is_receptor_bound = agent.bound is not None
@@ -139,14 +136,14 @@ class Master:
             is_too_far_away_to_bind = self.distance(ligand.position, receptor.position) > self.binding_distance
             if is_too_far_away_to_bind: continue
                 
-            if _metropolis_algorithm_for_binding():
+            if self._metropolis_algorithm_for_binding():
                 ligand.bound = receptor
                 receptor.bound = ligand
                 nanoparticle.bound = True
                 self.count += 1 #TODO check this isnt done twice
                 return
 
-    def _initialise_nanoparticle_position(total_radius, upper_limit):
+    def _initialise_nanoparticle_position(self, total_radius, upper_limit):
         while True:
             nanoparticle_cartesean_position = np.array([np.random.uniform(total_radius, upper_limit), np.random.uniform(total_radius, upper_limit),np.random.uniform(total_radius, upper_limit)])  # 3D cube cartesian system - rectangular coordinates
             if self._check_space_available_nanoparticle(nanoparticle_cartesean_position):
@@ -192,8 +189,8 @@ class Master:
         Φ = acos(random_movement_cartesian[2] / r)
         return np.array([r, θ, Φ])
 
-    def _metropolis_algorithm_for_binding():
+    def _metropolis_algorithm_for_binding(self):
         return np.random.uniform(low=0, high=1) > exp(-self.binding_energy)
 
-    def _calculate_distance(a, b):
+    def _calculate_distance(self, a, b):
         return linalg.norm(a - b)
