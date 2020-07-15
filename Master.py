@@ -1,15 +1,16 @@
 import numpy as np
 from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arccos as acos, exp as exp
-from ReceptorModel import Receptor
-from NanoparticleModel import Nanoparticle
-from LigandModel import Ligand
+from Receptor import Receptor
+from Nanoparticle import Nanoparticle
+from Ligand import Ligand
 import pandas as pd
 from numba import njit
 from random import shuffle
 from Visualiser import visualiser
+from BaseAgent import BaseAgent
 
 
-class Master:
+class Master(BaseAgent):
     ''' This class is in chanrge of controlling the system.
         We have the __init__ method, which is run when we first start up the calculation and sets up the system.
 
@@ -39,7 +40,6 @@ class Master:
         self.binding_distance = binding_distance
         self.receptor_radius = receptor_radius
         self.collision = False
-        self.count = 0
         self.coverage = [0]
         self.time = 0
         self.bound_nanoparticles = 0
@@ -76,7 +76,6 @@ class Master:
             self.coverage.append(self.calculate_surface_coverage(self.bound_nanoparticles))
             
         # visualiser(self)
-        self.calculate_surface_coverage(self.bound_nanoparticles) #TODO maybe remove this line
         number_of_bound_receptors = 0
         for i in self.agents:
             if isinstance(i, Receptor) and i.bound is not None:
@@ -85,49 +84,37 @@ class Master:
         print(f'There are {number_of_bound_receptors} receptors bound to nanoparticles')
 
     def step(self):
-        random_numbers = list(np.random.normal(size=(self.number_of_nanoparticles+self.number_of_receptors, 3)))
+        length_of_random_numbers = self.number_of_nanoparticles + 2 * self.number_of_receptors
+        random_numbers = list(np.random.normal(size = (length_of_random_numbers, 3)))
         nanoparticle_positions = [agent.position for agent in self.agents if isinstance(agent, Nanoparticle)]
         receptor_positions = [agent.position for agent in self.agents if isinstance(agent, Receptor)]
 
-        #TODO move this code
-        max_seperation_for_nanoparticle_to_react = self.nanoparticle_radius + self.ligand_length + self.receptor_length #TODO we need to add the bond length to this sum
-        max_seperation_for_receptor_to_react = self.nanoparticle_radius + self.ligand_length #TODO we need to add the bond length to this sum
+        max_seperation_for_receptor_to_react = self.nanoparticle_radius + self.ligand_length + self.binding_distance
         
         for agent in self.agents:
-            next_random_number = random_numbers.pop()
             if isinstance(agent, Nanoparticle):
                 nanoparticles_except_current = [posn for posn in nanoparticle_positions if posn is not agent.position]
-                agent.step(self.nanoparticle_brownian(next_random_number), nanoparticles_except_current, receptor_positions) #TODO move brownian to nanoparticle step
-                
-                is_nanoparticle_close_enough_to_react = agent.position[2] < max_seperation_for_nanoparticle_to_react
-                if not is_nanoparticle_close_enough_to_react: continue #we do this check to speed up the code, if the nanoparticle is nowehere near the surface we skip ahead
-
-                unbound_receptors = [x for x in self.agents if isinstance(x, Receptor) and x.bound is None]
-                for r in unbound_receptors:
-                    is_receptor_close_enough_to_react = self.distance(agent.position, r.position) < max_seperation_for_receptor_to_react
-                    #the line above was this commented out line, I think this is wrong so changed it, but am leaving it jic
-                    #is_receptor_close_enough_to_react = max_seperation_for_receptor_to_react <= self.distance(agent.position, r.position) < max_seperation_for_receptor_to_react + 1
-                    if is_receptor_close_enough_to_react:
-                        self.try_to_bind(agent, r)
+                agent.step(random_numbers.pop(), nanoparticles_except_current, receptor_positions)
             
             elif isinstance(agent, Receptor):
                 receptors_except_current = [receptor_position for receptor_position in receptor_positions if receptor_position is not agent.position] 
-                agent.step(self.receptor_brownian(next_random_number), receptors_except_current, nanoparticle_positions) #TODO move brownian to receptor_step
+                agent.step(random_numbers.pop(), random_numbers.pop(), receptors_except_current, nanoparticle_positions)
                 
                 is_receptor_bound = agent.bound is not None
-                if is_receptor_bound: continue
-
-                nanoparticles = [n for n in self.agents if isinstance(n, Nanoparticle)]
-                for n in nanoparticles:
-                    is_receptor_close_enough_to_react = self.distance(agent.position, n.position) < max_seperation_for_receptor_to_react
-                    if is_receptor_close_enough_to_react:
-                        self.try_to_bind(n, agent)
+                if is_receptor_bound: 
+                    self.try_to_unbind(agent)
+                else:
+                    nanoparticles = [n for n in self.agents if isinstance(n, Nanoparticle)]
+                    for n in nanoparticles:
+                        is_receptor_close_enough_to_react = self.distance(agent.position, n.position) < max_seperation_for_receptor_to_react
+                        if is_receptor_close_enough_to_react:
+                            self.try_to_bind(n, agent)
 
     def try_to_bind(self, nanoparticle, receptor):
         if nanoparticle.agent_id == receptor.agent_id: return
         
-        is_receptor__already_bound = receptor.bound is not None
-        if is_receptor__already_bound: return
+        is_receptor_already_bound = receptor.bound is not None
+        if is_receptor_already_bound: return
 
         for ligand in nanoparticle.ligands:
             is_ligand_already_bound = ligand.bound is not None
@@ -136,12 +123,16 @@ class Master:
             is_too_far_away_to_bind = self.distance(ligand.position, receptor.position) > self.binding_distance
             if is_too_far_away_to_bind: continue
                 
-            if self._metropolis_algorithm_for_binding():
+            if self._metropolis_algorithm_for_binding(self.binding_energy):
                 ligand.bound = receptor
                 receptor.bound = ligand
                 nanoparticle.bound = True
-                self.count += 1 #TODO check this isnt done twice
                 return
+
+    def try_to_unbind(self, receptor):
+        if self._metropolis_algorithm_for_unbinding(self.binding_energy):
+            receptor.bound.bound = None
+            receptor.bound = None
 
     def _initialise_nanoparticle_position(self, total_radius, upper_limit):
         while True:
@@ -175,22 +166,5 @@ class Master:
         self.surface_coverage = n * ((4 * (self.nanoparticle_radius + self.ligand_length) ** 2) / self.dimension ** 2)
         return self.surface_coverage
 
-    def _nanoparticle_brownian(self, array): #TODO move to nanoparticle class
-        random_movement_cartesian = ((2 * ((1.38064852e-23 * 310.15) / (
-                6 * pi * 8.9e-4 * (self.nanoparticle_radius * 1e-9)))) ** 0.5) * 1e9 * self.time_unit * array
-        return random_movement_cartesian
 
-    def _receptor_brownian(self, array): #TODO move to receptor class
-        random_movement_cartesian = ((2 * ((1.38064852e-23 * 310.15) / (
-                6 * pi * 8.9e-4 * (self.nanoparticle_radius * 1e-9 / 100)))) ** 0.5) * 1e9 * self.time_unit * array
-        r = (random_movement_cartesian[0] ** 2 + random_movement_cartesian[1] ** 2 + random_movement_cartesian[
-            2] ** 2) ** 0.5
-        θ = atan(random_movement_cartesian[1] / random_movement_cartesian[0])
-        Φ = acos(random_movement_cartesian[2] / r)
-        return np.array([r, θ, Φ])
 
-    def _metropolis_algorithm_for_binding(self):
-        return np.random.uniform(low=0, high=1) > exp(-self.binding_energy)
-
-    def _calculate_distance(self, a, b):
-        return linalg.norm(a - b)

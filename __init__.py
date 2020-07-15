@@ -16,7 +16,7 @@ def binding_energy():
         for _ in range(3):
             number_of_seconds = 1  # i.e. 1 hour = 3600 seconds
             model = Master(dimension=1000, binding_energy=int(i), time_unit=10e-3, number_of_receptors=1000, receptor_length=100,
-                               number_of_nanoparticles=190, nanoparticle_radius=50, number_of_ligands=100, ligand_length=7, binding_distance=4)
+                               number_of_nanoparticles=190, nanoparticle_radius=50, number_of_ligands=100, ligand_length=7, binding_distance=4, receptor_radius=3)
             model.create_receptors()  # 100 nm for receptor
             model.create_nanoparticles_and_ligands()  # 1-2 nm for ligand  # 95 particles
             print(f'{model.dimension/1000} μm\u00b3 system, {model.binding_energy} binding energy, {model.number_of_nanoparticles} Nanoparticles,\n'

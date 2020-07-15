@@ -1,6 +1,6 @@
 import pandas as pd
-from NanoparticleModel import Nanoparticle
-from ReceptorModel import Receptor
+from Nanoparticle import Nanoparticle
+from Receptor import Receptor
 import matplotlib.pyplot as plt
 
 

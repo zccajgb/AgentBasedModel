@@ -1,11 +1,11 @@
 from operator import is_
 import numpy as np
 from numpy.random import _bounded_integers
-from LigandModel import Ligand
-from numpy import linalg, pi as pi, sin as sin, cos as cos, arctan as atan, arccos as acos, exp as exp
+from Ligand import Ligand
+from BaseAgent import BaseAgent
 
-class Receptor:
-    def __init__(self, agent_id, base_position, receptor_length, dimension, binding_energy, nanoparticle_radius, ligand_length):
+class Receptor(BaseAgent):
+    def __init__(self, agent_id, base_position, receptor_length, dimension, binding_energy, nanoparticle_radius, ligand_length, cell_diffusion_coeff):
         self.agent_id = agent_id
         self.base_position = base_position
         self.binding_energy = binding_energy
@@ -15,14 +15,17 @@ class Receptor:
         self.receptor_length = receptor_length           
         self.temp_tip = None
         self.bound = None
+        self.weighted_diffusion_coef_tip = ((2 * ((1.38064852e-23 * 310.15) / (6 * np.pi * 8.9e-4 * (self.receptor_radius * 1e-9)))) ** 0.5) * 1e9 * self.time_unit
+        self.weighted_diffusion_coef_base = ((2 * cell_diffusion_coeff) ** 0.5) * 1e9 * self.time_unit
         
-        self.tip_position = np.array([np.random.uniform(0, receptor_length), np.random.uniform(0, (2 * pi)), np.random.uniform(0, (0.5 * pi))])
+        self.tip_position = np.array([np.random.uniform(0, receptor_length), np.random.uniform(0, (2 * np.pi)), np.random.uniform(0, (0.5 * np.pi))])
         tip_position_cartesean = self._convert_to_cartesean(self.tip_position)      
         absolute_position = tip_position_cartesean + self.base_position
         self.position = absolute_position
 
-    def step(self, value, receptors_list, nanoparticle_list):
-        self.move(value)
+    def step(self, random_array_base, random_array_tip, receptors_list, nanoparticle_list):
+        
+        self.move(random_array_base, random_array_tip)
         if self.is_space_available(receptors_list, nanoparticle_list):
             is_move_denied, is_bond_broken = self._decide_on_move()
             if not is_move_denied:
@@ -32,32 +35,18 @@ class Receptor:
                 self.bound = None
             return self.position
 
-    def move(self, amount_to_move):
-        #TODO this shouldn't use the same value for both movements. The movement should probably be generated here.
-        new_tip_position = self.tip_position + amount_to_move
+    def move(self, random_array_base, random_array_tip):
+        distance_to_move_tip = self._brownian_motion(self.weighted_diffusion_coef_tip, random_array_tip, spherical=True)
+        distance_to_move_base = self._brownian_motion(self.weighted_diffusion_coef_base, random_array_base)
+        new_tip_position = self.tip_position + distance_to_move_tip
 
-        cartesean_amount_to_move = self._convert_to_cartesean(amount_to_move)
-
-        new_base_position = self.base_position + cartesean_amount_to_move
+        new_base_position = self.base_position + distance_to_move_base
         new_base_position[2] = 0 #shouldn't leave the surface
         new_tip_position, new_base_position = self._apply_boundary_conditions(new_tip_position, new_base_position)
         self.temp_base = new_base_position
         self.temp_tip = new_tip_position
         self.temp_position = self._get_absolute_position(new_tip_position, new_base_position)
     
-    def _convert_to_cartesean(array):
-        x = array[0] * sin(array[2]) * cos(array[1])
-        y = array[0] * sin(array[2]) * sin(array[1])
-        z = array[0] * cos(array[2])  # z value of tip
-        return np.array([x, y, z])
-
-    def _convert_to_spherical(array):
-        r = (array[0] ** 2 + array[1] ** 2 + array[
-            2] ** 2) ** 0.5
-        theta = atan(array[1] / array[0])
-        phi = acos(array[2] / r)
-        return np.array([r, theta, phi])
-
     def _decide_on_move(self):
         is_bound = isinstance(self.bound, Ligand)
         is_move_denied = False
@@ -71,15 +60,9 @@ class Receptor:
         return is_move_denied, is_bond_broken
 
     def _accept_move(self):
-            self.position = self.temp_position
-            self.tip_position = self.temp_tip
-            self.base_position = self.temp_base
-
-    def _metropolis_algorithm_for_bond_breaking(self):
-        return np.random.uniform(low=0, high=1) < exp(-self.binding_energy)
-
-    def _calculate_distance(a, b):
-        return linalg.norm(a - b)
+        self.position = self.temp_position
+        self.tip_position = self.temp_tip
+        self.base_position = self.temp_base
 
     def _is_in_range(position, boundaries):
         for (p, b) in zip(position, boundaries):
@@ -101,23 +84,15 @@ class Receptor:
         if not is_tip_in_radius:
             tip_position[0] = self._reflective_boundary_condition(tip_position[0], self.receptor_length)
         
-        tip_position[1] = tip_position[1] % (2*pi)
+        tip_position[1] = tip_position[1] % (2*np.pi)
 
-        is_tip_above_surface = 0 <= tip_position[2] <= (0.5 * pi)
+        is_tip_above_surface = 0 <= tip_position[2] <= (0.5 * np.pi)
         if not is_tip_above_surface:
-            tip_position[2] = self._reflective_boundary_condition(tip_position[2], 0.5*pi)
+            tip_position[2] = self._reflective_boundary_condition(tip_position[2], 0.5*np.pi)
         return tip_position, base_position
                    
-    def _reflective_boundary_condition(position, boundary, offset=0):
-        position = position - offset
-        boundary = boundary - offset
-        position = abs(position) % 2*boundary
-        if position > boundary:
-            position = 2* boundary - position
-        return position + offset
-
     def _metropolis_algorithm_for_repulsion(self, seperation, min_allowed_separation):
-        return np.random.uniform(low=0, high=1) < exp(-self._repulsive_potential(seperation, min_allowed_separation))
+        return np.random.uniform(low=0, high=1) < np.exp(-self._repulsive_potential(seperation, min_allowed_separation))
 
     def _check_space_available(self, receptors_list, nanoparticle_list):
         seperation_when_touching = 2 * self.receptor_radius
@@ -128,19 +103,6 @@ class Receptor:
         min_allowed_separation_nanoparticles = 1.5 * seperation_when_touching
         is_move_okay_nanoparticles = self._is_space_available(nanoparticle_list, min_allowed_separation_nanoparticles, self.temp_position)
         return is_move_okay_nanoparticles and is_move_okay_receptors
-
-    def _is_space_available(self, agents_list, min_allowed_seperation, current_position):
-        for i in agents_list:
-            seperation = self._calculate_distance(current_position, i)
-            is_nanoparticle_too_close = seperation < min_allowed_seperation
-            if is_nanoparticle_too_close:  # Checks that if the receptor is a certain distance from the other nanoparticles
-                if not self._metropolis_algorithm_for_repulsion(seperation, min_allowed_seperation):
-                    return False  
-        return True
-    
-    def _repulsive_potential(distance, max_closeness):
-        potential = 4 * 1 * ((max_closeness / distance) ** 12 - (max_closeness / distance) ** 6)
-        return potential
 
 
 
