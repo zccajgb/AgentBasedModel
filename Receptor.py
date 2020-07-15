@@ -38,6 +38,8 @@ class Receptor(BaseAgent):
             return self.position
 
     def move(self, random_array_base, random_array_tip):
+        #TODO, I think the movement of the receptor needs to be constrained, I think it should always be fully exended
+        # but I want to check this. I also don't think it should be able to move so its completely flat to the cell surface (e.g. phi=0.5pi)
         distance_to_move_tip = self._brownian_motion(self.weighted_diffusion_coef_tip, random_array_tip, spherical=True)
         distance_to_move_base = self._brownian_motion(self.weighted_diffusion_coef_base, random_array_base)
         new_tip_position = self.tip_position + distance_to_move_tip
